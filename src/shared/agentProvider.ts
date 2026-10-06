@@ -34,6 +34,7 @@ export type AgentProvider =
   | 'pi'
   | 'copilot'
   | 'cursor'
+  | 'muse'
   | 'custom';
 
 /** Structured descriptor for how a NON-hiveAware provider gets hive lifecycle
@@ -51,7 +52,7 @@ export type AgentProvider =
  *               and `inboxDelivery` is how mail reaches it ('terminal' work-order
  *               handoff today; 'serve' reserved for a future HTTP push path). */
 export type BridgeDescriptor =
-  | { kind: 'hooks'; shim: 'agy' | 'codex' | 'pi' | 'opencode' | 'grok' | 'gemini' }
+  | { kind: 'hooks'; shim: 'agy' | 'codex' | 'pi' | 'opencode' | 'grok' | 'gemini' | 'muse' }
   | {
       kind: 'proxy';
       api: 'openai' | 'anthropic';
@@ -76,6 +77,9 @@ export interface AgentProviderPreset {
   supportsModel: boolean;
   /** Flag that selects the session model, e.g. `--model`. */
   modelFlag?: string;
+  /** Default reasoning effort, appended as `--reasoning-effort <value>` when
+   *  argv states none (muse). undefined = the CLI's own default. */
+  defaultEffort?: string;
   /** Flag appended when the floor is in auto (skip-permissions) mode.
    *  PR #54 consumers read this; mirrors `autoModeFlag`. */
   autoFlag?: string;
@@ -568,6 +572,49 @@ export const AGENT_PROVIDER_PRESETS: AgentProviderPreset[] = [
     docsUrl: 'https://cursor.com/docs/cli/install'
   },
   {
+    id: 'muse',
+    // Meta Muse Code (`muse`, https://dev.meta.ai/docs/muse-code). Verified
+    // against 1.4.3 on Windows: interactive TUI with a positional PROMPT,
+    // `--model` (muse-spark-*), `--yolo`, `--reasoning-effort max`, `--trust-workspace`,
+    // and Claude-shaped hooks (SessionStart/Stop/..., stdin JSON,
+    // `commandWindows` selected on win32, hook env scrubbed to PATH et al).
+    label: 'Muse Code',
+    defaultCommand: 'muse',
+    commandGroups: [],
+    // Full-access default (operator choice): no approvals, no OS sandbox, and
+    // the workspace trusted for the run. The narrower `--approval-mode never`
+    // (sandbox kept) stays available by typing it into the command instead --
+    // an explicit stance there suppresses this one. --trust-workspace ALSO
+    // rides as a hive pre-arg on every spawn (muse arm in ensureAgent), so
+    // non-auto (ask-first) workers keep delegation + project rules; in auto
+    // mode the repetition is harmless.
+    autoModeFlag: '--yolo',
+    autoFlag: '--yolo',
+    // Any of these states a posture already -- do not stack ours on top.
+    autoStanceTokens: ['--approval-mode', '--yolo', '--disable-approval'],
+    supportsModel: true,
+    modelFlag: '--model', // muse-spark-1.3 (default), 1.2, 1.1
+    defaultEffort: 'max', // verified live on a membership login
+    hiveAware: false, // no --append-system-prompt/--settings; protocol rides in positionally
+    // HOOKS bridge via the new `muse` shim (installMuseHooks): a per-agent
+    // managed hooks file selected per-spawn by TBH_MANAGED_HOOKS_PATH -- zero
+    // writes to the user's own muse settings. Muse scrubs hook env, so the
+    // agent id rides in argv and the shim derives the socket from its own path.
+    bridge: { kind: 'hooks', shim: 'muse' },
+    canReceiveInbox: true,
+    // `muse [PROMPT]` orients the session, then the TUI stays alive for mail.
+    positionalInitialPrompt: true,
+    recommendedOrchestratorModel: 'muse-spark-1.3',
+    // Resume via subcommand: `muse resume <id>` reopens the interactive TUI.
+    // The grammar takes ONLY the id (verified live) — the spawn drops the
+    // seed prompt, and unknown ids fall back to a fresh session (see the muse
+    // arm at the resume site + museSessionExists).
+    resumeSubcommand: 'resume',
+    // No unattended installer: distribution is account-bound (Meta login) and
+    // there is no documented Windows one-liner -- manual banner + docs link.
+    docsUrl: 'https://dev.meta.ai/docs/muse-code'
+  },
+  {
     id: 'custom',
     label: 'Custom',
     defaultCommand: '',
@@ -594,6 +641,7 @@ export function isAgentProvider(value: unknown): value is AgentProvider {
     value === 'pi' ||
     value === 'copilot' ||
     value === 'cursor' ||
+    value === 'muse' ||
     value === 'custom'
   );
 }
@@ -648,6 +696,7 @@ export function inferAgentProvider(command: string | undefined, explicit?: unkno
   // Cursor ships as `cursor-agent`; `agent` is a shorter alias (generic name — check last).
   if (bin === 'cursor-agent') return 'cursor';
   if (bin === 'agent') return 'cursor';
+  if (bin === 'muse') return 'muse';
   if (bin === 'claude' || !bin) return 'claude';
   return 'custom';
 }
@@ -700,6 +749,16 @@ export function hasAutoModeStance(args: string[], provider: AgentProvider): bool
   const lead = flag.trim().split(/\s+/)[0];
   const stance = new Set([...(lead ? [lead] : []), ...(preset.autoStanceTokens ?? [])]);
   return args.some((a) => stance.has(a));
+}
+
+/** Append the preset's default reasoning effort (`--reasoning-effort`) unless
+ *  argv already states one. Main-side idempotent application (the D9 pattern):
+ *  GUI hires bake it via buildSpawnCommand, main-only spawns get it here. */
+export function argsWithDefaultEffort(args: string[], provider: AgentProvider): string[] {
+  const effort = providerPreset(provider).defaultEffort;
+  if (!effort) return args;
+  if (args.includes('--reasoning-effort')) return args;
+  return [...args, '--reasoning-effort', effort];
 }
 
 /** Returns any env vars the provider needs for non-interactive / first-run suppression. */

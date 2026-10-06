@@ -605,9 +605,9 @@
       "desc": "你的克隆协调着一窝 AI 编程智能体——持久、可观察、全本地。里面有什么：",
       "features": {
         "engines": {
-          "label": "十一大引擎，一间办公室",
-          "desc": "Claude Code、Codex、Grok、Kimi、Antigravity、Qwen、OpenCode、Crush、pi、Copilot 与 Cursor —— 在同一楼层并肩工作的实时智能体。",
-          "descPlain": "十一个 AI 助手 —— Claude、Codex、Cursor、Gemini、Grok 等 —— 在同一间共享办公室里并肩工作。"
+          "label": "十二大引擎，一间办公室",
+          "desc": "Claude Code、Codex、Grok、Kimi、Antigravity、Qwen、OpenCode、Crush、pi、Copilot、Cursor 与 Muse Code —— 在同一楼层并肩工作的实时智能体。",
+          "descPlain": "十二个 AI 助手 —— Claude、Codex、Cursor、Gemini、Grok、Muse 等 —— 在同一间共享办公室里并肩工作。"
         },
         "clone": {
           "label": "{{godName}} 就是你的克隆",
@@ -642,7 +642,8 @@
       "antigravity": "Antigravity — Google Gemini",
       "qwen": "Qwen — 在你的机器上运行本地 Qwen 模型",
       "gemini": "Gemini CLI —— Google Gemini",
-      "cursor": "Cursor Agent CLI —— 使用你的 Cursor 额度（Luna、Composer 等）"
+      "cursor": "Cursor Agent CLI —— 使用你的 Cursor 额度（Luna、Composer 等）",
+      "muse": "Muse Code —— Meta（使用你的 Muse 订阅）"
     },
     "home": {
       "descPlain": "为应用创建一个新的空文件夹作为家。应用记住的一切——它自己的设置和你智能体的记忆——都存放在这里。像 ~/HarnessAgents 这样的地方就很合适。如果它不存在，我们会为你创建。",

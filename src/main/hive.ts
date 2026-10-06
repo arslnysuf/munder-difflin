@@ -472,6 +472,12 @@ export class HiveManager {
     const root = this.root();
     return root ? join(root, 'bin', 'cth-hook.cjs') : null;
   }
+  /** The Muse Code hook shim (`<root>/bin/muse-hook.cjs`), written in
+   *  ensureHive next to cth-hook.cjs. See MUSE_HOOK_SHIM. */
+  private museShimPath(): string | null {
+    const root = this.root();
+    return root ? join(root, 'bin', 'muse-hook.cjs') : null;
+  }
   /** The proxy-bridge sidecar (qwen). Pure-Node loopback reverse-proxy that
    *  observes a hookless CLI's LLM traffic and synthesizes the same HIVE_SOCK
    *  payloads the hook shims emit. Written in ensureHive alongside cth-hook.cjs. */
@@ -663,6 +669,7 @@ export class HiveManager {
     // on every bootstrap so it tracks code changes.
     mkdirSync(join(root, 'bin'), { recursive: true });
     writeFileSync(this.shimPath()!, HOOK_SHIM, 'utf8');
+    writeFileSync(this.museShimPath()!, MUSE_HOOK_SHIM, 'utf8');
     // The proxy-bridge sidecar for hookless CLIs (qwen). Same refresh policy.
     writeFileSync(this.proxyShimPath()!, PROXY_BRIDGE_SHIM, 'utf8');
     // The bundled-node launcher every shim above is invoked through — MUST be
@@ -913,6 +920,23 @@ export class HiveManager {
               env.GEMINI_CLI_SYSTEM_SETTINGS_PATH = this.installGeminiHooks(dir);
             }
             else if (desc.shim === 'grok') this.installGrokHooks();
+            else if (desc.shim === 'muse') {
+              // Meta Muse Code (verified on muse 1.4.3, Windows): a per-agent
+              // managed hooks file, selected per-spawn by TBH_MANAGED_HOOKS_PATH
+              // (the user's own muse settings are never touched; the managed
+              // tier needs no workspace trust). Muse scrubs hook env, so the
+              // shim takes its context from argv, not AGENT_ID/HIVE_SOCK.
+              env.TBH_MANAGED_HOOKS_PATH = this.installMuseHooks(dir, meta.id, sock);
+              // --trust-workspace rides on EVERY spawn (not in the preset's
+              // autoModeFlag): an untrusted worker silently loses subagent
+              // delegation + project rules. Hive-correctness, not a stance.
+              preArgs.push('--trust-workspace');
+              // Membership guard: a META_API_KEY inherited from the parent env
+              // would bill API usage instead of the user's Muse subscription
+              // (Meta resolves the env key first; an empty value is ignored,
+              // so blanking can never break auth -- verified live).
+              env.META_API_KEY = '';
+            }
           } else if (desc.kind === 'proxy') {
             // Stable per-spawn session id, stamped on every synthesized payload so
             // recordSession (registry resume key) and the cost ledger persist.
@@ -1224,6 +1248,43 @@ export class HiveManager {
    *  `claude --resume <id>` spawn so a restarted agent resumes its thread. */
   lastSession(agentId: string): string | undefined {
     return this.registry().agents[agentId]?.sessionId;
+  }
+
+  /** Where Muse keeps retained sessions (`sessions/YYYY/MM/DD/<id>/`). */
+  private museSessionStores(): string[] {
+    const roots = [join(homedir(), '.local', 'share', 'muse', 'sessions')];
+    const xdg = process.env.XDG_DATA_HOME;
+    if (xdg) roots.unshift(join(xdg, 'muse', 'sessions'));
+    return roots;
+  }
+
+  /** True when Muse still retains `<sessionId>` (a dated `session.jsonl`).
+   *  Guards `muse resume`: a stale id exits 1 ("has no saved log", verified
+   *  live) and would poison every restart, so unknown ids fall back to a
+   *  fresh session. Only id-shaped refs qualify — display names never reach
+   *  the filesystem. `storeRoot` overrides the stores (tests). Fail-closed. */
+  museSessionExists(sessionId: string, storeRoot?: string): boolean {
+    try {
+      if (!sessionId || !/^[0-9a-zA-Z][0-9a-zA-Z-]{15,}$/.test(sessionId)) return false;
+      const stores = storeRoot ? [storeRoot] : this.museSessionStores();
+      const subdirs = (dir: string): string[] => {
+        try {
+          return readdirSync(dir).filter((e) => {
+            try { return statSync(join(dir, e)).isDirectory(); } catch { return false; }
+          });
+        } catch { return []; }
+      };
+      for (const store of stores) {
+        for (const y of subdirs(store)) {
+          for (const m of subdirs(join(store, y))) {
+            for (const d of subdirs(join(store, y, m))) {
+              if (existsSync(join(store, y, m, d, sessionId, 'session.jsonl'))) return true;
+            }
+          }
+        }
+      }
+      return false;
+    } catch { return false; }
   }
 
   /** Claude Code settings that route every relevant hook through the shim, plus
@@ -2546,6 +2607,43 @@ export class HiveManager {
     } catch (e) { console.error('[hive] installGrokHooks failed:', e); }
   }
 
+  /** Meta Muse Code lifecycle-hook bridge (verified on muse 1.4.3, Windows).
+   *  Writes a per-agent managed hooks file (`<agentDir>/muse-hooks.json`;
+   *  Claude-shaped: SessionStart/Stop/..., stdin JSON) and returns its path --
+   *  the caller selects it per-spawn via TBH_MANAGED_HOOKS_PATH, so the user's
+   *  own muse settings are never mutated (codex-grade isolation). No matchers:
+   *  muse matches everything without one.
+   *  Quoting: win32 uses nodeRunUnquoted for BOTH handler fields -- muse wraps
+   *  the handler in cmd, which breaks inner double quotes (live probe: a
+   *  quoted spaced path dies with "not recognized"; bare PATH lookup works).
+   *  The agent id is a slug (never spaces); the socket is derived by the shim
+   *  from its own path when --sock is absent, so no quoted value is ever
+   *  needed on win32. */
+  private installMuseHooks(dir: string, agentId: string, sock: string): string {
+    const file = join(dir, 'muse-hooks.json');
+    try {
+      const shim = this.museShimPath();
+      if (!shim) return file;
+      // The live socket endpoint rides in argv too (env is scrubbed): a
+      // Windows named pipe (never spaces) or a POSIX path (quoted -- sh keeps
+      // it whole; commandWindows is ignored there so it needs no quoting).
+      const sockArg = process.platform === 'win32' ? sock : `"${sock}"`;
+      const invokePosix = this.nodeRun(shim, '--agent', agentId, '--sock', sockArg);
+      const invokeWin = this.nodeRunUnquoted(shim, '--agent', agentId, '--sock', sockArg);
+      const handler = {
+        type: 'command',
+        command: process.platform === 'win32' ? invokeWin : invokePosix,
+        commandWindows: invokeWin
+      };
+      const events = ['PreToolUse', 'PostToolUse', 'Stop', 'SubagentStop',
+        'SessionStart', 'UserPromptSubmit', 'PreCompact', 'PostCompact'];
+      const hooks: Record<string, unknown> = {};
+      for (const ev of events) hooks[ev] = [{ hooks: [handler] }];
+      this.writeJson(file, { hooks });
+    } catch (e) { console.error('[hive] installMuseHooks failed:', e); }
+    return file;
+  }
+
   /** Write the live fleet snapshot Michael reads (`fleet.json`, gitignored).
    *  Best-effort — called from a timer, must never throw. */
   writeFleetSnapshot(snapshot: unknown): void {
@@ -3144,6 +3242,47 @@ process.stdin.on('end', () => {
     }
     setTimeout(() => process.exit(0), 1500).unref();
     return;
+  }
+  if (!sock) { process.exit(0); }
+  let resp = '';
+  const done = (code) => { if (resp) process.stdout.write(resp); process.exit(code); };
+  const c = net.createConnection(sock, () => c.write(JSON.stringify(payload) + '\\n'));
+  c.setEncoding('utf8');
+  c.on('data', (d) => { resp += d; });
+  c.on('end', () => done(0));
+  c.on('error', () => process.exit(0));
+  setTimeout(() => process.exit(0), 5000).unref();
+});
+`;
+
+// ─── muse-hook shim (written to <hive>/bin/muse-hook.cjs) ─────────────────────
+// Same pipe shape as cth-hook (stdin JSON in, HIVE_SOCK forward, response back
+// on stdout, always exit 0), with two muse twists (verified on muse 1.4.3):
+//  - hook env is scrubbed (PATH et al only), so the agent id arrives via argv
+//    (--agent <id> and --sock <endpoint>, baked into the per-agent managed
+//    hooks file);
+//  - the socket path is derived from this script's own location
+//    (<hive>/bin/muse-hook.cjs -> <hive>/hooks.sock), because muse wraps the
+//    handler in cmd and inner double quotes do not survive it.
+const MUSE_HOOK_SHIM = `#!/usr/bin/env node
+'use strict';
+const net = require('net');
+const path = require('path');
+const argv = process.argv.slice(2);
+const argVal = (name) => {
+  const i = argv.indexOf(name);
+  return i >= 0 && i + 1 < argv.length ? argv[i + 1] : null;
+};
+let data = '';
+process.stdin.setEncoding('utf8');
+process.stdin.on('data', (d) => { data += d; });
+process.stdin.on('end', () => {
+  let payload = {};
+  try { payload = JSON.parse(data || '{}'); } catch (_) {}
+  if (!payload.agent_id) payload.agent_id = argVal('--agent') || process.env.AGENT_ID || null;
+  let sock = argVal('--sock') || process.env.HIVE_SOCK || null;
+  if (!sock && process.argv[1]) {
+    try { sock = path.join(path.dirname(process.argv[1]), '..', 'hooks.sock'); } catch (_) {}
   }
   if (!sock) { process.exit(0); }
   let resp = '';

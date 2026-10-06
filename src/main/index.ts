@@ -72,6 +72,7 @@ import { parseHireDeepLink, type HireManifest } from '../shared/hire';
 import { ClosingTimeController } from './closingTime';
 import {
   argsWithAutoModeFlag,
+  argsWithDefaultEffort,
   inferAgentProvider,
   isClaudeProvider,
   nonInteractiveEnvForProvider,
@@ -2895,6 +2896,9 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
   // other CLIs (it must not blindly attach `--resume` when the seed failed).
   if (opts.hive && !claudeProvider) {
     const preset = providerPreset(provider);
+    // Default reasoning effort (muse): GUI hires already carry it from
+    // buildSpawnCommand (no-op there); main-only spawns get it here (D9).
+    opts.args = argsWithDefaultEffort(opts.args ?? [], provider);
     const rf = preset.resumeFlag;
     const rsub = preset.resumeSubcommand;
     // An id typed into Add Agent's "resume session" field wins; otherwise fall
@@ -2906,6 +2910,23 @@ async function spawnAgentCore(opts: AgentSpawnOptions, owner: Electron.WebConten
     if (sid && rf) {
       const args = opts.args ?? [];
       if (!args.includes(rf)) { args.push(rf, sid); opts.args = args; didResume = true; }
+    } else if (sid && rsub && provider === 'muse') {
+      // Subcommand form (Muse): `muse resume <SESSION_ID> [OPTIONS...]` — root
+      // options may trail the id, but NO positional prompt: `resume` takes
+      // ONLY the id (verified live: an extra positional breaks subcommand
+      // parsing and muse falls back to TUI mode with a usage error). The
+      // session continues with its own context, so the hive seed (always the
+      // trailing arg for positional providers) is dropped, not re-sent.
+      // Unknown ids exit 1 ("has no saved log") and would poison every
+      // restart, so fall back to fresh like the Claude/Codex arms do.
+      if (!hive.museSessionExists(sid)) {
+        console.warn(`[resume] muse session "${sid}" has no saved log — starting a fresh session`);
+        if (typedSid) resumeNotFound = true;
+      } else if ((opts.args ?? [])[0] !== rsub) {
+        opts.args = [rsub, sid, ...(opts.args ?? []).slice(0, -1)];
+        didResume = true;
+        console.log('[resume] muse resume', sid);
+      }
     } else if (sid && rsub) {
       // Subcommand form (Codex): `codex resume [OPTIONS] [SESSION_ID]` — the
       // subcommand MUST be argv[0], the id trails the flags. Codex indexes

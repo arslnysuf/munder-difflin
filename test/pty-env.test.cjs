@@ -96,6 +96,30 @@ test('app defaults land: PATH, terminal identity, color', () => {
   assert.equal(env.FORCE_COLOR, '1');
 });
 
+test('win32: inherited Path folds into the layered PATH (single key in child)', () => {
+  const env = buildPtyEnv({ Path: 'C:\\sys', ComSpec: 'C:\\cmd.exe' }, 'C:\\resolved', undefined, 'win32');
+  assert.deepEqual(
+    Object.keys(env).filter((k) => k.toLowerCase() === 'path'),
+    ['PATH']
+  );
+  assert.equal(env.PATH, 'C:\\resolved');
+  assert.equal(env.ComSpec, 'C:\\cmd.exe');
+});
+
+test('win32: exact-name keys still overwrite by spread; per-agent keys fold too', () => {
+  const env = buildPtyEnv({ PATH: 'C:\\stale', Path: 'C:\\shadow', TERM: 'dumb' }, 'C:\\resolved', { AGENT_ID: 'a1' }, 'win32');
+  assert.deepEqual(Object.keys(env).filter((k) => k.toLowerCase() === 'path'), ['PATH']);
+  assert.equal(env.PATH, 'C:\\resolved');
+  assert.equal(env.TERM, 'xterm-256color');
+  assert.equal(env.AGENT_ID, 'a1');
+});
+
+test('posix: case-distinct keys are different variables and both survive', () => {
+  const env = buildPtyEnv({ Path: '/weird', PATH: '/stale' }, '/resolved/bin', undefined, 'darwin');
+  assert.equal(env.Path, '/weird');
+  assert.equal(env.PATH, '/resolved/bin');
+});
+
 test('locale: UTF-8 defaults on darwin, the user\'s exported locale wins, win32 untouched', () => {
   const bare = buildPtyEnv({}, '/bin', undefined, 'darwin');
   assert.equal(bare.LANG, 'en_US.UTF-8');

@@ -43,6 +43,22 @@ const CLAUDE_CONFIG_KEEP = new Set([
   'CLAUDE_CODE_USE_VERTEX'
 ]);
 
+/** Delete keys of `env` that shadow one of `keep` case-insensitively. Windows
+ *  env vars are case-insensitive but a JS object is not: without the fold,
+ *  inherited `Path` plus layered `PATH` would land in the child block TWICE,
+ *  and strict consumers (muse's sandbox) fail closed on the collision instead
+ *  of guessing which one wins. Call on win32 only — on POSIX `Path` and
+ *  `PATH` are distinct variables and both survive. Exact-name keys are never
+ *  deleted; the layer's own value overwrites them by spread. Mutates `env`. */
+export function foldWindowsEnvCase(env: Record<string, string>, keep: readonly string[]): Record<string, string> {
+  const exact = new Set(keep);
+  const lower = new Set(keep.map((k) => k.toLowerCase()));
+  for (const k of Object.keys(env)) {
+    if (!exact.has(k) && lower.has(k.toLowerCase())) delete env[k];
+  }
+  return env;
+}
+
 export function buildPtyEnv(
   parentEnv: NodeJS.ProcessEnv,
   userPath: string,
@@ -58,6 +74,11 @@ export function buildPtyEnv(
     if (v === undefined) continue;
     if (CLAUDE_MARKER_RE.test(k) && !CLAUDE_CONFIG_KEEP.has(k)) continue;
     inherited[k] = v;
+  }
+  if (platform === 'win32') {
+    // Fold BEFORE layering: drop inherited case-shadows of every key the
+    // layers below are about to set, so the child block carries each name once.
+    foldWindowsEnvCase(inherited, ['PATH', 'TERM', 'COLORTERM', 'FORCE_COLOR', ...Object.keys(agentEnv ?? {})]);
   }
   return {
     ...inherited,

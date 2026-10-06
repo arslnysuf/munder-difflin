@@ -8,6 +8,14 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- **Muse Code joins the floor as a twelfth engine.** Workers and Michael can now run on
+  Meta's `muse` CLI (verified against 1.4.3 on Windows): positional prompt bootstrap, `--model`
+  (`muse-spark-1.3/1.2/1.1` + `-contributor` variants), `--yolo` (full access) with `--reasoning-effort max` by default, and a hooks bridge that reports live
+  status and session ids with zero writes to your own muse settings (per-agent managed hooks
+  file + per-spawn `TBH_MANAGED_HOOKS_PATH`). Spawns blank `META_API_KEY` so workers bill your
+  Muse membership instead of API usage, and always pass `--trust-workspace` so delegation and
+  project rules stay on. Restarts resume the recorded session when its log exists, else begin fresh with the protocol
+  re-injected.
 - **Tasks show their id.** The one thing people actually refer to a card by — `bmt-12` — was not
   displayed anywhere: not on the kanban card, which printed only the title and the assignee, and not
   in the detail view behind it. It now leads the card above the title, and leads the detail view's

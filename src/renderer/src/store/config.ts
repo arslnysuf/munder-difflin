@@ -431,5 +431,8 @@ export function buildSpawnCommand(
   // bypassPermissions, Codex's dangerous bypass, Grok's always-approve, Kimi's
   // auto, or agy's skip flag.
   if (config.autoMode && preset.autoFlag) cmd = `${cmd} ${preset.autoFlag}`;
+  // Default reasoning effort (muse): baked so the visible command matches the
+  // spawn; spawnAgentCore re-applies idempotently for main-only spawns (D9).
+  if (preset.defaultEffort && !cmd.includes('--reasoning-effort')) cmd = `${cmd} --reasoning-effort ${preset.defaultEffort}`;
   return cmd;
 }

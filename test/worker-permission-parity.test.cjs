@@ -24,7 +24,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const loadTs = require('./load-ts.cjs');
 
-const { argsWithAutoModeFlag } = loadTs('src/shared/agentProvider.ts');
+const { argsWithAutoModeFlag, argsWithDefaultEffort } = loadTs('src/shared/agentProvider.ts');
 
 test('a main-only spawn (ephemeral worker, voice hire) gets the bypass flag when autoMode is on', () => {
   assert.deepEqual(
@@ -58,6 +58,33 @@ test('the input array is never mutated in place', () => {
 
 test('a provider with no auto-mode flag (custom) is left alone', () => {
   assert.deepEqual(argsWithAutoModeFlag(['--foo'], true, 'custom'), ['--foo']);
+});
+
+test('muse yolo flag is applied without duplicating an explicit stance', () => {
+  assert.deepEqual(
+    argsWithAutoModeFlag(['--model', 'muse-spark-1.3'], true, 'muse'),
+    ['--model', 'muse-spark-1.3', '--yolo']
+  );
+  assert.deepEqual(
+    argsWithAutoModeFlag(['--approval-mode', 'never'], true, 'muse'),
+    ['--approval-mode', 'never']
+  );
+});
+
+test('muse default effort is applied without duplicating an explicit stance', () => {
+  assert.deepEqual(
+    argsWithDefaultEffort(['--model', 'muse-spark-1.3'], 'muse'),
+    ['--model', 'muse-spark-1.3', '--reasoning-effort', 'max']
+  );
+  assert.deepEqual(
+    argsWithDefaultEffort(['--reasoning-effort', 'low'], 'muse'),
+    ['--reasoning-effort', 'low']
+  );
+});
+
+test('providers without a default effort (claude, custom) are left alone', () => {
+  assert.deepEqual(argsWithDefaultEffort(['--model', 'x'], 'claude'), ['--model', 'x']);
+  assert.deepEqual(argsWithDefaultEffort(['--foo'], 'custom'), ['--foo']);
 });
 
 test('codex\'s multi-token auto flag is applied the same way as Claude\'s two-token flag', () => {

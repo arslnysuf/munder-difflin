@@ -144,6 +144,14 @@ const CONTEXT_COMMANDS: Record<AgentProvider, ProviderContextCommands> = {
   // auto-compact. Revisit when a shipped command table is transcribed.
   cursor: NO_CONTEXT_COMMANDS,
 
+  // Muse 1.4.3 shipped binary strings (Windows): `/new/clear ... is only
+  // available in the interactive TUI`, a `/new/clear` "start fresh" chooser,
+  // and a `/compact` literal. Both verbs exist; /clear discards-and-restarts
+  // (it may raise a keep-tasks chooser while background tasks run). The
+  // official slash set lists /compact bare -- no focus contract, so never
+  // append prose.
+  muse: { compact: '/compact', clear: '/clear', compactTakesFocus: false },
+
   // An arbitrary user binary. We cannot know its command surface, and guessing
   // means typing slashes into someone's unknown REPL.
   custom: NO_CONTEXT_COMMANDS

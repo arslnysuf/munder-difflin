@@ -605,9 +605,9 @@
       "desc": "تنسّق نسختك خليةً من وكلاء البرمجة بالذكاء الاصطناعي — دائمين، وقابلين للمراقبة، وكلهم محليون. إليك ما بالداخل:",
       "features": {
         "engines": {
-          "label": "أحد عشر محرّكًا، مكتب واحد",
-          "desc": "Claude Code وCodex وGrok وKimi وAntigravity وQwen وOpenCode وCrush وpi وCopilot وCursor — وكلاء أحياء على أرضية واحدة.",
-          "descPlain": "أحد عشر مساعدًا ذكيًا — Claude وCodex وCursor وGemini وGrok وغيرهم — يعملون جنبًا إلى جنب في مكتب واحد مشترك."
+          "label": "اثنا عشر محرّكًا، مكتب واحد",
+          "desc": "Claude Code وCodex وGrok وKimi وAntigravity وQwen وOpenCode وCrush وpi وCopilot وCursor وMuse Code — وكلاء أحياء على أرضية واحدة.",
+          "descPlain": "اثنا عشر مساعدًا ذكيًا — Claude وCodex وCursor وGemini وGrok وMuse وغيرهم — يعملون جنبًا إلى جنب في مكتب واحد مشترك."
         },
         "clone": {
           "label": "{{godName}} هو نسختك",
@@ -642,7 +642,8 @@
       "antigravity": "Antigravity — Google Gemini",
       "qwen": "Qwen — يشغّل نموذج Qwen محليًا على جهازك",
       "gemini": "Gemini CLI - Google Gemini",
-      "cursor": "Cursor Agent CLI — يستخدم أرصدة Cursor لديك (Luna، Composer، …)"
+      "cursor": "Cursor Agent CLI — يستخدم أرصدة Cursor لديك (Luna، Composer، …)",
+      "muse": "Muse Code — Meta (يستخدم اشتراك Muse الخاص بك)"
     },
     "home": {
       "descPlain": "أنشئ مجلدًا جديدًا فارغًا ليتّخذه التطبيق منزلًا. كل ما يتذكّره التطبيق — إعداداته الخاصة وذاكرة وكلائك — يُخزَّن هنا. شيء مثل ~/HarnessAgents يفي بالغرض. وسننشئه لك إن لم يكن موجودًا.",

@@ -72,6 +72,23 @@ test('Pi is a first-class inferred provider with hooks, positional bootstrap, an
   assert.equal(preset.resumeFlag, '--session');
 });
 
+test('Muse is a first-class inferred provider with hooks, positional bootstrap, and subcommand resume', () => {
+  assert.equal(isAgentProvider('muse'), true);
+  assert.equal(inferAgentProvider('muse --model muse-spark-1.3'), 'muse');
+  assert.equal(inferAgentProvider('C:\\Users\\test\\AppData\\Local\\Programs\\muse\\muse.cmd'), 'muse');
+  const preset = providerPreset('muse');
+  assert.equal(preset.defaultCommand, 'muse');
+  assert.equal(preset.autoFlag, '--yolo');
+  assert.equal(preset.supportsModel, true);
+  assert.equal(preset.canReceiveInbox, true);
+  assert.deepEqual(preset.bridge, { kind: 'hooks', shim: 'muse' });
+  assert.equal(preset.initialPromptFlag, undefined);
+  assert.equal(preset.positionalInitialPrompt, true);
+  assert.equal(preset.resumeFlag, undefined);
+  assert.equal(preset.resumeSubcommand, 'resume');
+  assert.equal(preset.defaultEffort, 'max');
+});
+
 test('every non-hive-aware inbox provider declares exactly one bootstrap delivery path', () => {
   for (const preset of AGENT_PROVIDER_PRESETS) {
     if (preset.hiveAware || !preset.canReceiveInbox) continue;
@@ -110,6 +127,10 @@ test('provider commands use matching models and equivalent bypass modes', () => 
   assert.equal(
     buildSpawnCommand(autoConfig, 'pro', 'gemini'),
     'gemini --model pro --approval-mode=yolo'
+  );
+  assert.equal(
+    buildSpawnCommand(autoConfig, 'muse-spark-1.3', 'muse'),
+    'muse --model muse-spark-1.3 --yolo --reasoning-effort max'
   );
 });
 
@@ -175,12 +196,13 @@ test('God only sees providers that can drain hive inbox messages', () => {
   // God-eligible = supportsModel && canReceiveInbox: kimi and copilot are
   // excluded (no inbox drain path), custom is excluded (no model picker).
   // Cursor is interactive (no -p) so it IS god-eligible.
+  // Muse is interactive (positional prompt) with a hooks bridge, so it IS god-eligible too.
   assert.deepEqual(
     modelProvidersForAgent(true).map((preset) => preset.id),
-    ['claude', 'codex', 'grok', 'gemini', 'antigravity', 'qwen', 'opencode', 'crush', 'pi', 'cursor']
+    ['claude', 'codex', 'grok', 'gemini', 'antigravity', 'qwen', 'opencode', 'crush', 'pi', 'cursor', 'muse']
   );
   assert.deepEqual(
     modelProvidersForAgent(false).map((preset) => preset.id),
-    ['claude', 'codex', 'grok', 'kimi', 'gemini', 'antigravity', 'qwen', 'opencode', 'crush', 'pi', 'copilot', 'cursor']
+    ['claude', 'codex', 'grok', 'kimi', 'gemini', 'antigravity', 'qwen', 'opencode', 'crush', 'pi', 'copilot', 'cursor', 'muse']
   );
 });

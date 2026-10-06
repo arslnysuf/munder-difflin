@@ -5,6 +5,15 @@ import { resolveCommand, userShellPath } from './shellEnv';
 import { expandTilde } from './fs';
 import { projectDir } from './transcript';
 import { ensureKilled } from './procKill';
+import { foldWindowsEnvCase } from './ptyEnv';
+
+/** win32: collapse inherited case-shadows (`Path`) so the layered `PATH` is
+ *  the only one in the child block (same fold as buildPtyEnv — see ptyEnv.ts).
+ *  No-op on POSIX, where case-distinct names are different variables. */
+function foldSpawnEnv(env: Record<string, string>, extra: Record<string, string> | undefined): Record<string, string> {
+  if (process.platform !== 'win32') return env;
+  return foldWindowsEnvCase(env, ['PATH', ...Object.keys(extra ?? {})]);
+}
 
 /**
  * Shared helper: run a HIDDEN interactive claude session (ephemeral PTY) and
@@ -137,11 +146,11 @@ export function runHiddenClaude(prompt: string, opts: HiddenClaudeOptions): Prom
         cols: 220,
         rows: 50,
         cwd: opts.cwd,
-        env: {
+        env: foldSpawnEnv({
           ...process.env,
           PATH: userShellPath(),
           ...(opts.env ?? {}),
-        } as Record<string, string>,
+        } as Record<string, string>, opts.env),
       });
     } catch (e) {
       resolve({ ok: false, error: e instanceof Error ? e.message : String(e) });
